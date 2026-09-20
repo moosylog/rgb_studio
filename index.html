@@ -1,1 +1,1163 @@
 
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RGB Lighting Studio — Ambient + Reactive</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+
+    <script>
+        Prism.languages.insertBefore('javascript', 'comment', {
+            'config-block': {
+                pattern: /\/\*CONFIG[\s\S]*?CONFIG\*\//,
+                inside: {
+                    'config-label': { pattern: /\/\*CONFIG|CONFIG\*\//, alias: 'important' },
+                    'property': { pattern: /"(?:\\.|[^\\"\r\n])*"(?=\s*:)/, alias: 'keyword' },
+                    'string': { pattern: /"(?:\\.|[^\\"\r\n])*"/, alias: 'string' },
+                    'number': { pattern: /-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/i, alias: 'number' },
+                    'punctuation': { pattern: /[{}[\]:,]/, alias: 'punctuation' },
+                    'boolean': { pattern: /\b(?:true|false)\b/i, alias: 'keyword' }
+                }
+            }
+        });
+    </script>
+
+    <!-- Local data files: keep these two next to this HTML file -->
+    <script src="keyboard-layouts.js"></script>
+    <script src="effects-library.js"></script>
+
+    <style>
+        :root {
+            --bg: #f0f2f5; --surface: #ffffff; --surface-hover: #f9fafb; --text: #111827;
+            --border: #d1d5db; --canvas-bg: #e5e7eb; --accent: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.15);
+            --reactive-accent: #ff9900; --reactive-glow: rgba(255, 153, 0, 0.15);
+            --syn-keyword: #d73a49; --syn-function: #3e999f; --syn-string: #718c00; --syn-number: #f5871f; --syn-comment: #8e908c; --syn-operator: #3e999f; --syn-important: #000000;
+        }
+
+        [data-theme="dark"] {
+            --bg: #030305; --surface: #111116; --surface-hover: #1a1a24; --text: #e2e8f0;
+            --border: #333333; --canvas-bg: #0a0a0f; --accent: #00ee66; --accent-glow: rgba(0, 238, 102, 0.1);
+            --reactive-accent: #ffaa00; --reactive-glow: rgba(255, 170, 0, 0.12);
+            --syn-keyword: #c678dd; --syn-function: #61afef; --syn-string: #98c379; --syn-number: #d19a66; --syn-comment: #9098a9; --syn-operator: #56b6c2; --syn-important: #e2e8f0;
+        }
+
+        body { font-family: 'JetBrains Mono', monospace, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+
+        /* --- Toolbar --- */
+        .toolbar { background: var(--surface); padding: 15px; border-bottom: 1px solid var(--border); display: flex; gap: 15px; align-items: center; flex-wrap: wrap; z-index: 10; }
+        select, button, input[type="number"] { padding: 8px 12px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        input[type="number"] { font-weight: normal; cursor: text; padding: 6px; width: 45px; }
+        select:focus, button:focus, input:focus { border-color: var(--accent); outline: none; }
+        button:hover { background: var(--surface-hover); }
+        select optgroup { background: var(--surface); color: #888; font-style: normal; font-weight: bold; }
+        select option { color: var(--text); font-weight: normal; }
+
+        .btn-accent { color: #000; background: var(--accent); border-color: var(--accent); }
+        .btn-accent:hover { filter: brightness(1.2); }
+        .btn-guide { color: var(--accent); border-color: var(--accent); background: var(--accent-glow); }
+
+        .zoom-controls { display: flex; align-items: center; gap: 5px; background: var(--bg); padding: 4px; border-radius: 6px; border: 1px solid var(--border); }
+        .zoom-controls button { border: none; background: transparent; padding: 4px 10px; }
+        .zoom-controls span { font-size: 14px; min-width: 40px; text-align: center; }
+
+        .toggle-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; font-weight: bold;}
+        .toggle-label input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); width: 16px; height: 16px;}
+
+        .channel-group { display: flex; align-items: center; gap: 8px; background: var(--bg); padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .channel-group.reactive-group .toggle-label input[type="checkbox"] { accent-color: var(--reactive-accent); }
+
+        /* --- AI Prompt Drawer --- */
+        .prompt-drawer { background: var(--surface); border-bottom: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.4s ease; display: flex; flex-direction: column; align-items: center; }
+        .prompt-drawer.open { max-height: 900px; padding: 20px 40px; overflow-y: auto; }
+        .prompt-content { width: 100%; max-width: 900px; }
+        .prompt-content h3 { margin-top: 0; color: var(--text); display: flex; justify-content: space-between; align-items: center;}
+        .prompt-content pre { background: var(--bg); padding: 15px; border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 13px; color: var(--text); line-height: 1.5; }
+
+        /* --- Workspace --- */
+        .main-workspace { display: flex; flex: 1; overflow: hidden; }
+
+        /* Left Pane */
+        .visualizer-panel { flex: 1; display: flex; flex-direction: column; padding: 20px; align-items: center; justify-content: center; position: relative; min-width: 250px;}
+        .canvas-container { width: 100%; height: 100%; background: var(--canvas-bg); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; box-shadow: inset 0 0 20px rgba(0,0,0,0.1);}
+        canvas { display: block; }
+        .capture-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px; font-size: 11px; opacity: 0.8; pointer-events: none; }
+
+        /* Resizer Drag Handle */
+        .resizer { width: 6px; background: var(--border); cursor: col-resize; transition: background 0.2s; z-index: 10; position: relative; display: flex; align-items: center; justify-content: center;}
+        .resizer:hover, .resizer.dragging { background: var(--accent); }
+        .resizer::after { content: '⋮'; position: absolute; color: var(--bg); font-size: 24px; pointer-events: none;}
+
+        /* Right Pane */
+        .editor-panel { width: 500px; min-width: 320px; flex-shrink: 0; background: var(--surface); display: flex; flex-direction: column; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); }
+        .tab-btn { flex: 1; padding: 12px 6px; border: none; border-bottom: 3px solid transparent; background: transparent; color: var(--text); font-weight: bold; cursor: pointer; transition: 0.2s; font-family: 'JetBrains Mono', monospace; opacity: 0.6; border-radius: 0; font-size: 12px;}
+        .tab-btn:hover { opacity: 1; background: var(--surface-hover); }
+        .tab-btn.active { opacity: 1; border-bottom-color: var(--accent); background: var(--surface); color: var(--accent); }
+
+        .tab-content { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        .tab-content.active { display: flex; }
+
+        /* Visual Editor Styles */
+        .gui-section-header { flex-shrink: 0; padding: 10px 20px; background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        .gui-section-header:first-child { border-top: none; }
+        .gui-section-header.ambient { color: var(--accent); }
+        .gui-section-header.reactive { color: var(--reactive-accent); }
+        .gui-container { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .gui-control { display: flex; align-items: center; justify-content: space-between; background: var(--bg); padding: 12px 15px; border-radius: 6px; border: 1px solid var(--border); }
+        .gui-control label { font-weight: bold; font-size: 12px; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+        .gui-control-input { display: flex; align-items: center; gap: 10px; }
+        .gui-control input[type="range"] { width: 120px; cursor: pointer; accent-color: var(--accent); }
+        .gui-control input[type="color"] { border: 1px solid var(--border); border-radius: 4px; padding: 0; width: 32px; height: 32px; cursor: pointer; background: transparent; }
+        .gui-control select { padding: 6px; font-size: 12px; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px;}
+        .gui-control span { font-size: 12px; font-weight: bold; width: 35px; text-align: right; color: var(--accent); }
+        .no-gui-state { text-align: center; color: #888; font-style: italic; margin-top: 20px; font-size: 13px; line-height: 1.6; padding: 0 20px;}
+
+        /* --- SYNTAX HIGHLIGHTED CODE EDITOR --- */
+        .code-header { padding: 10px 15px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; z-index: 10; gap: 10px;}
+        .code-mode-switch { display: flex; gap: 4px; }
+        .code-mode-switch .tab-btn { flex: none; padding: 6px 12px; font-size: 11px; border-radius: 4px; border-bottom: none; background: var(--bg); opacity: 0.7; }
+        .code-mode-switch .tab-btn.active { background: var(--accent); color: #000; opacity: 1; }
+        .code-wrapper { position: relative; flex: 1; overflow: hidden; background: var(--surface); }
+
+        .code-wrapper textarea, .code-wrapper pre {
+            margin: 0; padding: 20px;
+            border: none; outline: none;
+            width: 100%; height: 100%;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.5;
+            box-sizing: border-box; white-space: pre;
+            position: absolute; top: 0; left: 0;
+            tab-size: 4;
+        }
+
+        .code-wrapper textarea { color: transparent !important; background: transparent !important; caret-color: var(--text); z-index: 2; resize: none; overflow: auto; }
+        .code-wrapper pre { z-index: 1; pointer-events: none; color: var(--text); overflow: hidden !important; }
+
+        /* Info Box */
+        .info-box { background: var(--accent-glow); border-bottom: 1px solid var(--border); padding: 12px 20px; font-family: sans-serif; font-size: 13px; line-height: 1.5; z-index: 10; }
+        .info-box code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; border: 1px solid var(--border); color: var(--text); }
+        .info-box.reactive-note { background: var(--reactive-glow); border-left: 4px solid var(--reactive-accent); }
+
+        .bake-settings { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: bold; }
+
+        /* Custom Prism.js Theme Mapping */
+        .token.comment, .token.block-comment { color: var(--syn-comment); font-style: italic; }
+        .token.keyword { color: var(--syn-keyword); font-weight: bold;}
+        .token.function { color: var(--syn-function); }
+        .token.string { color: var(--syn-string); }
+        .token.number { color: var(--syn-number); }
+        .token.operator { color: var(--syn-operator); }
+        .token.punctuation { color: var(--text); opacity: 0.7;}
+        .token.property { color: var(--syn-keyword); }
+        .token.important { color: var(--syn-important); font-weight: bold; font-style: normal;}
+
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <button onclick="toggleTheme()">🌗 Theme</button>
+        <span style="color: var(--border);">|</span>
+
+        <select id="hwSelect" onchange="switchLayout()">
+            <option value="go60" selected>Go60</option>
+            <option value="ansi60">ANSI 60%</option>
+            <option value="corne">Corne</option>
+            <option value="voyager">ZSA Voyager</option>
+            <option value="glove80">Glove80</option>
+        </select>
+
+        <label class="toggle-label">
+            <input type="checkbox" id="showLabelsToggle" checked onchange="toggleLabels()"> Labels
+        </label>
+
+        <div class="zoom-controls">
+            <button onclick="setZoom(-0.1)">-</button>
+            <span id="zoomDisplay">100%</span>
+            <button onclick="setZoom(0.1)">+</button>
+            <button onclick="resetZoom()">Reset</button>
+        </div>
+
+        <span style="color: var(--border);">|</span>
+
+        <div class="channel-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="ambientToggle" checked onchange="toggleChannel('ambient')"> 🌊 Ambient
+            </label>
+            <!-- Options are generated at load time from AMBIENT_PRESETS in effects-library.js — see populatePresetSelect(). -->
+            <select id="ambientPresetSelect" onchange="loadPreset('ambient')"></select>
+        </div>
+
+        <div class="channel-group reactive-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="reactiveToggle" checked onchange="toggleChannel('reactive')"> ⚡ Reactive
+            </label>
+            <!-- Options are generated at load time from REACTIVE_PRESETS in effects-library.js — see populatePresetSelect(). -->
+            <select id="reactivePresetSelect" onchange="loadPreset('reactive')"></select>
+        </div>
+
+        <span style="color: var(--border);">|</span>
+        <button class="btn-guide" onclick="toggleGuide()">💡 AI Prompt Guides</button>
+    </div>
+
+    <div id="guideDrawer" class="prompt-drawer">
+        <div class="prompt-content">
+            <h3><span>🌊 Ambient Effect — AI Prompt</span><button class="btn-accent" onclick="copyPrompt('promptTextAmbient', this)">📋 Copy Prompt</button></h3>
+            <pre id="promptTextAmbient">Act as an expert technical artist. I am building a custom RGB Keyboard Lighting Engine using JavaScript.
+I need you to write a mathematical lighting effect based on my request.
+
+This is an AMBIENT effect: it plays continuously, driven only by time and key position — it has no idea when keys are pressed.
+
+### ⚙️ ENGINE SPECS
+You only need to write the logic for a single keycap, called every frame. You have access to:
+1. `nx` (0.0 left to 1.0 right), `ny` (0.0 top to 1.0 bottom)
+2. `t` (Continuous time in seconds)
+3. `params` (Object containing GUI variables)
+4. `fmod(a,b)` (Use this instead of the % operator for floats)
+
+### 🎛️ GUI PARAMETERS (MANDATORY)
+You MUST ALWAYS include a JSON block at the VERY TOP of your code wrapped in `/*CONFIG` and `CONFIG*/` to expose settings to the user.
+Supported types: "slider", "color", "select".
+
+Example:
+/*CONFIG
+{
+  "speed": { "type": "slider", "min": 0, "max": 10, "value": 2.5, "step": 0.1 },
+  "color": { "type": "color", "value": "#00ffcc" },
+  "direction": { "type": "select", "options": {"Left": 1, "Right": -1}, "value": 1 }
+}
+CONFIG*/
+
+### 📜 STRICT RULES
+- Write pure JavaScript. No external libraries.
+- DO NOT use the `**` operator. Use `Math.pow(base, exp)`.
+- DO NOT use the `%` operator. Use `fmod(a, b)`.
+- Write all numbers with a decimal point (e.g., `1.0` instead of `1`) for safe C-transpilation.
+- Use `params.speed` or `params.color` inside your code.
+- End your code by returning a valid CSS color string (e.g., `rgba(r,g,b,a)`, `hsl(h,s,l)`, `rgb(r,g,b)`, or hex), or return 'transparent' to leave the key unlit.
+- Helper functions can be defined at the bottom.
+
+### 🎯 MY REQUEST
+I want an ambient effect that looks like: [INSERT EFFECT]</pre>
+
+            <h3 style="margin-top: 30px;"><span>⚡ Reactive Effect — AI Prompt</span><button class="btn-accent" onclick="copyPrompt('promptTextReactive', this)">📋 Copy Prompt</button></h3>
+            <pre id="promptTextReactive">Act as an expert technical artist. I am building a custom RGB Keyboard Lighting Engine using JavaScript.
+I need you to write a REACTIVE lighting effect: it fires from the physical key(s) the user actually presses, and fades out over time. It runs alongside (or instead of) an Ambient layer.
+
+### ⚙️ ENGINE SPECS
+You write the logic for a single keycap, called every frame. You have access to:
+1. `nx` (0.0 left to 1.0 right), `ny` (0.0 top to 1.0 bottom) — this key's own position
+2. `t` (Continuous time in seconds)
+3. `params` (Object containing GUI variables)
+4. `fmod(a,b)` (Use this instead of the % operator for floats)
+5. `reactive` — info about recent key presses, shaped like this:
+   - `reactive.held` — true if THIS exact key is currently being physically held down
+   - `reactive.count` — number of currently active (not-yet-decayed) presses
+   - `reactive.nearest` — closest active press to this key, or null if none:
+       { dist, age, dx, dy }
+       - dist: distance (same 0–1 scale as nx/ny) from this key to the pressed key
+       - age: seconds since that key was pressed (0 = just now, grows every frame)
+       - dx, dy: signed offset (this key minus the pressed key), for directional effects
+   - `reactive.presses` — ALL active presses in the same shape as `reactive.nearest`, sorted nearest-first (use this to support chords / multiple simultaneous keys)
+
+### 🎛️ GUI PARAMETERS (MANDATORY)
+Same as ambient — a `/*CONFIG ... CONFIG*/` JSON block at the very top exposing "slider", "color", or "select" controls.
+
+### 📜 STRICT RULES
+- Write pure JavaScript. No external libraries.
+- DO NOT use the `**` operator. Use `Math.pow(base, exp)`.
+- DO NOT use the `%` operator. Use `fmod(a, b)`.
+- Always guard against `reactive.nearest` being null (or `reactive.count` being 0) before using it, and return 'transparent' when there's nothing to show — this lets the layer underneath (Ambient, or the dark background) show through.
+- Use `age` to fade the effect out over a duration you expose as a `params` slider (e.g. `params.duration`).
+- End your code by returning a valid CSS color string, or 'transparent'.
+- Helper functions can be defined at the bottom.
+
+### 🎯 MY REQUEST
+I want a reactive (keypress-triggered) effect that looks like: [INSERT EFFECT]</pre>
+        </div>
+    </div>
+
+    <div class="main-workspace">
+        <div class="visualizer-panel">
+            <div class="canvas-container" id="canvasWrapper">
+                <canvas id="kbCanvas"></canvas>
+                <div class="capture-hint">⌨️ Type on your keyboard to trigger Reactive effects</div>
+            </div>
+        </div>
+
+        <div class="resizer" id="dragMe"></div>
+
+        <div class="editor-panel" id="rightPanel">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('visual')" id="tab-visual">🎛️ Visual Editor</button>
+                <button class="tab-btn" onclick="switchTab('code')" id="tab-code">💻 Code Editor</button>
+                <button class="tab-btn" onclick="switchTab('zmk')" id="tab-zmk">⚙️ ZMK Procedural</button>
+                <button class="tab-btn" style="color:#ff00aa" onclick="switchTab('moergo')" id="tab-moergo">🔥 Baked LUT (.dtsi)</button>
+            </div>
+
+            <div class="tab-content active" id="content-visual">
+                <div class="gui-section-header ambient">🌊 Ambient Controls</div>
+                <div class="gui-container" id="guiPanelAmbient"></div>
+                <div class="gui-section-header reactive">⚡ Reactive Controls</div>
+                <div class="gui-container" id="guiPanelReactive"></div>
+            </div>
+
+            <div class="tab-content" id="content-code">
+                <div class="code-header">
+                    <div class="code-mode-switch">
+                        <button class="tab-btn active" id="codeModeBtn-ambient" onclick="switchCodeMode('ambient')">🌊 Ambient Code</button>
+                        <button class="tab-btn" id="codeModeBtn-reactive" onclick="switchCodeMode('reactive')">⚡ Reactive Code</button>
+                    </div>
+                    <button class="btn-accent" onclick="compileChannel(currentCodeMode, false)">▶ Update Effect</button>
+                </div>
+                <div class="code-wrapper" id="codeWrapper-ambient">
+                    <textarea id="shaderCode-ambient" spellcheck="false" oninput="syncEditor('ambient')" onscroll="syncScroll('ambient')"></textarea>
+                    <pre id="shaderPre-ambient" aria-hidden="true"><code id="shaderHighlight-ambient" class="language-javascript"></code></pre>
+                </div>
+                <div class="code-wrapper" id="codeWrapper-reactive" style="display:none;">
+                    <textarea id="shaderCode-reactive" spellcheck="false" oninput="syncEditor('reactive')" onscroll="syncScroll('reactive')"></textarea>
+                    <pre id="shaderPre-reactive" aria-hidden="true"><code id="shaderHighlight-reactive" class="language-javascript"></code></pre>
+                </div>
+            </div>
+
+            <div class="tab-content" id="content-zmk">
+                <div class="info-box">
+                    <strong>⚙️ ZMK Procedural:</strong> Auto-calibrating C-Code for the <strong>Ambient</strong> layer only. Generates dynamic math directly in Zephyr. Save this code as <code>custom_rgb.c</code> in your ZMK config repository.
+                </div>
+                <div class="info-box reactive-note">
+                    <strong>⚡ About Reactive export:</strong> Reactive (keypress-triggered) lighting is currently a live browser preview only — it isn't transpiled to firmware here, since real per-keypress firmware lighting is normally wired up through ZMK's own key-event/behavior APIs rather than a per-frame math function. Ask if you'd like help sketching that integration separately.
+                </div>
+                <div class="code-header" style="border-top: 1px solid var(--border); border-bottom: none; justify-content: flex-end;">
+                    <button class="btn-accent" onclick="copyCode('zmkCodeCode', this)">📋 Copy C-Code</button>
+                </div>
+                <div class="code-wrapper">
+                    <textarea id="zmkCodeCode" spellcheck="false" readonly onscroll="syncSimpleScroll('zmkCodeCode', 'zmkPre')"></textarea>
+                    <pre id="zmkPre" aria-hidden="true"><code id="zmkHighlight" class="language-c"></code></pre>
+                </div>
+            </div>
+
+            <div class="tab-content" id="content-moergo">
+                <div class="info-box" style="border-left: 4px solid #ff00aa;">
+                    <strong>🔥 The Animation Baker:</strong> Bypasses code translation entirely for the <strong>Ambient</strong> layer. We simulate the logic in the browser and pack the exact frames into a hex array. 100% accurate!
+                </div>
+                <div class="code-header" style="border-top: 1px solid var(--border); border-bottom: none;">
+                    <div class="bake-settings">
+                        Secs: <input type="number" id="bake-dur" value="2" min="1" max="10">
+                        FPS: <input type="number" id="bake-fps" value="15" min="5" max="60">
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-accent" style="background:#ff00aa; border-color:#ff00aa; color:white;" onclick="bakeAnimation(false)">▶ BAKE NOW</button>
+                        <button class="btn-accent" onclick="copyCode('moergoCodeCode', this)">📋 Copy Node</button>
+                    </div>
+                </div>
+                <div class="code-wrapper">
+                    <textarea id="moergoCodeCode" spellcheck="false" readonly onscroll="syncSimpleScroll('moergoCodeCode', 'moergoPre')">
+// Click '▶ BAKE NOW' to generate your MoErgo compatible .dtsi LUT code!
+// The engine will render the frames and place the hexadecimal arrays here.
+                    </textarea>
+                    <pre id="moergoPre" aria-hidden="true"><code id="moergoHighlight" class="language-c"></code></pre>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+// --- 0. Resizer Split Logic ---
+const resizer = document.getElementById('dragMe');
+const rightPanel = document.getElementById('rightPanel');
+let isResizing = false;
+let lastDownX = 0;
+
+resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    lastDownX = e.clientX;
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const delta = lastDownX - e.clientX;
+    const newWidth = rightPanel.offsetWidth + delta;
+    if (newWidth > 320 && newWidth < window.innerWidth - 250) {
+        rightPanel.style.width = newWidth + 'px';
+        lastDownX = e.clientX;
+        window.dispatchEvent(new Event('resize'));
+    }
+});
+
+window.addEventListener('mouseup', () => {
+    if(isResizing) {
+        isResizing = false;
+        resizer.classList.remove('dragging');
+        document.body.style.cursor = 'default';
+        document.body.style.userSelect = '';
+    }
+});
+
+// --- 0.5. Syntax Highlighter & Live Sync Logic ---
+// Channel-aware editors (ambient / reactive)
+function syncEditor(channelName) {
+    const ch = channels[channelName];
+    let text = ch.editorEl.value;
+    if (text[text.length - 1] === "\n") text += " ";
+    text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const codeEl = document.getElementById(ch.highlightId);
+    codeEl.innerHTML = text;
+    if (window.Prism) Prism.highlightElement(codeEl);
+    liveUpdateFromCode(channelName);
+}
+
+function syncScroll(channelName) {
+    const ch = channels[channelName];
+    document.getElementById(ch.preId).scrollTop = ch.editorEl.scrollTop;
+    document.getElementById(ch.preId).scrollLeft = ch.editorEl.scrollLeft;
+}
+
+// Simple read-only editors (ZMK C-code / Baked LUT)
+function syncSimpleEditor(textareaId, codeId) {
+    let textarea = document.getElementById(textareaId);
+    let codeEl = document.getElementById(codeId);
+    let text = textarea.value;
+    if (text[text.length - 1] === "\n") text += " ";
+    text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    codeEl.innerHTML = text;
+    if (window.Prism) Prism.highlightElement(codeEl);
+}
+
+function syncSimpleScroll(textareaId, preId) {
+    document.getElementById(preId).scrollTop = document.getElementById(textareaId).scrollTop;
+    document.getElementById(preId).scrollLeft = document.getElementById(textareaId).scrollLeft;
+}
+
+function copyCode(id, btn) {
+    const textArea = document.getElementById(id);
+    const originalText = btn.innerText;
+
+    textArea.focus();
+    textArea.select();
+
+    let success = false;
+    try { success = document.execCommand("copy"); } catch (err) {}
+
+    if (success) {
+        btn.innerText = "✅ Copied!";
+    } else if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textArea.value);
+        btn.innerText = "✅ Copied!";
+    } else {
+        btn.innerText = "❌ Failed";
+    }
+
+    setTimeout(() => btn.innerText = originalText, 2000);
+    window.getSelection().removeAllRanges();
+}
+
+function copyPrompt(id, btn) {
+    navigator.clipboard.writeText(document.getElementById(id).innerText);
+    const original = btn.innerText;
+    btn.innerText = "✅ Copied!";
+    setTimeout(() => btn.innerText = original, 2000);
+}
+
+function parseCSSColor(str) {
+    if(!str || str==='transparent') return [0,0,0,0];
+    if(str==='white') return [255,255,255,1];
+    if(str.startsWith('rgb')) {
+        let m = str.match(/[\d.]+/g); return [parseFloat(m[0]), parseFloat(m[1]), parseFloat(m[2]), m.length>3 ? parseFloat(m[3]) : 1];
+    }
+    if(str.startsWith('hsl')) {
+        let m = str.match(/[\d.]+/g);
+        let h=parseFloat(m[0]), s=parseFloat(m[1])/100, l=parseFloat(m[2])/100, a=m.length>3?parseFloat(m[3]):1;
+        let c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m_=l-c/2;
+        let r=0,g=0,b=0;
+        if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
+        return [(r+m_)*255, (g+m_)*255, (b+m_)*255, a];
+    }
+    if(str.startsWith('#')) {
+        let hex = str.replace('#',''); if(hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+        let num = parseInt(hex, 16); return [num>>16, (num>>8)&255, num&255, 1];
+    }
+    if(str.startsWith('rgba')) {
+        let m = str.match(/[\d.]+/g); return [parseFloat(m[0]), parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3])];
+    }
+    return [0,0,0,1];
+}
+
+// Standard alpha-composite: top color over bottom color (bottom defaults to opaque black)
+function blendColors(topStr, bottomStr) {
+    const top = parseCSSColor(topStr);
+    if (top[3] >= 0.999) return `rgb(${top[0]}, ${top[1]}, ${top[2]})`;
+    const bottom = bottomStr ? parseCSSColor(bottomStr) : [0, 0, 0, 1];
+    const outA = top[3] + bottom[3] * (1 - top[3]);
+    if (outA <= 0.001) return 'rgba(0,0,0,0)';
+    const r = (top[0]*top[3] + bottom[0]*bottom[3]*(1-top[3])) / outA;
+    const g = (top[1]*top[3] + bottom[1]*bottom[3]*(1-top[3])) / outA;
+    const b = (top[2]*top[3] + bottom[2]*bottom[3]*(1-top[3])) / outA;
+    return `rgba(${r}, ${g}, ${b}, ${outA})`;
+}
+
+function liveUpdateFromCode(channelName) {
+    const ch = channels[channelName];
+    let code = ch.editorEl.value;
+    const configMatch = code.match(/\/\*CONFIG([\s\S]*?)CONFIG\*\//);
+    if (configMatch) {
+        try {
+            let config = JSON.parse(configMatch[1]);
+            let currentKeys = Object.keys(ch.params).join(',');
+            let newKeys = Object.keys(config).join(',');
+
+            if (currentKeys !== newKeys) {
+                ch.params = {};
+                const guiPanel = document.getElementById(ch.guiPanelId);
+                guiPanel.innerHTML = '';
+                buildGUI(config, guiPanel, channelName);
+            } else {
+                for (let key in config) {
+                    let val = config[key].value;
+                    ch.params[key] = val;
+                    let inputEl = document.getElementById('gui-input-' + channelName + '-' + key);
+                    if (inputEl && inputEl.value != val) {
+                        inputEl.value = val;
+                        let valEl = document.getElementById('gui-val-' + channelName + '-' + key);
+                        if (valEl) valEl.innerText = val;
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+    if (channelName === 'ambient') {
+        updateZmkCode();
+        bakeAnimation(true);
+    }
+}
+
+// --- 1. Channel State (Ambient + Reactive run in parallel) ---
+const channels = {
+    ambient: {
+        presets: AMBIENT_PRESETS,
+        editorEl: null, highlightId: 'shaderHighlight-ambient', preId: 'shaderPre-ambient',
+        guiPanelId: 'guiPanelAmbient', presetSelectId: 'ambientPresetSelect',
+        params: {}, shaderFn: null, enabled: true
+    },
+    reactive: {
+        presets: REACTIVE_PRESETS,
+        editorEl: null, highlightId: 'shaderHighlight-reactive', preId: 'shaderPre-reactive',
+        guiPanelId: 'guiPanelReactive', presetSelectId: 'reactivePresetSelect',
+        params: {}, shaderFn: null, enabled: true
+    }
+};
+let currentCodeMode = 'ambient';
+
+// --- 2. Core Engine State ---
+const canvas = document.getElementById("kbCanvas");
+const ctx = canvas.getContext("2d");
+const zmkEditor = document.getElementById("zmkCodeCode");
+
+let activeLayout = [];
+let layoutBounds = {};
+let zoomFactor = 1.0;
+let showLabels = true;
+
+// Reactive input tracking
+const REACTIVE_MAX_AGE = 4.0; // seconds an old press stays in memory (cleanup only — presets fade sooner via their own `duration` param)
+let activePresses = [];       // { nx, ny, time }
+let heldKeyIndices = new Set();
+
+// --- Preset dropdown population (reads straight from effects-library.js —
+// add a new key to AMBIENT_PRESETS / REACTIVE_PRESETS and it just appears
+// here on next load, no HTML edits needed) ---
+function formatPresetLabel(key, code) {
+    // Optional first line inside the preset string: // LABEL: 💥 My Effect
+    const m = code.match(/^\s*\/\/\s*LABEL:\s*(.+?)\s*$/m);
+    if (m) return m[1];
+    // Fallback: turn camelCase into "Title Case" so unlabeled presets still look decent.
+    const spaced = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function populatePresetSelect(selectId, presetsObj) {
+    const select = document.getElementById(selectId);
+    select.innerHTML = '';
+    for (const key in presetsObj) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = formatPresetLabel(key, presetsObj[key]);
+        select.appendChild(opt);
+    }
+}
+
+// --- Setup ---
+function init() {
+    channels.ambient.editorEl = document.getElementById('shaderCode-ambient');
+    channels.reactive.editorEl = document.getElementById('shaderCode-reactive');
+
+    populatePresetSelect('ambientPresetSelect', AMBIENT_PRESETS);
+    populatePresetSelect('reactivePresetSelect', REACTIVE_PRESETS);
+
+    window.addEventListener('resize', () => {
+        canvas.width = document.getElementById("canvasWrapper").clientWidth || 800;
+        canvas.height = document.getElementById("canvasWrapper").clientHeight || 400;
+    });
+    window.dispatchEvent(new Event('resize'));
+    switchLayout();
+    loadPreset('ambient');
+    loadPreset('reactive');
+    attachKeyListeners();
+    requestAnimationFrame(draw);
+}
+
+function copyPromptLegacy(btn) { copyPrompt('promptTextAmbient', btn); }
+function setZoom(amt) { zoomFactor = Math.max(0.2, Math.min(3.0, zoomFactor + amt)); document.getElementById("zoomDisplay").innerText = Math.round(zoomFactor * 100) + "%"; }
+function resetZoom() { zoomFactor = 1.0; document.getElementById("zoomDisplay").innerText = "100%"; }
+function toggleLabels() { showLabels = document.getElementById('showLabelsToggle').checked; }
+function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+function toggleGuide() { document.getElementById('guideDrawer').classList.toggle('open'); }
+function toggleChannel(name) { channels[name].enabled = document.getElementById(name + 'Toggle').checked; }
+
+function switchTab(tab) {
+    ['visual','code','zmk','moergo'].forEach(t => {
+        document.getElementById('tab-' + t).classList.remove('active');
+        document.getElementById('content-' + t).classList.remove('active');
+    });
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('content-' + tab).classList.add('active');
+
+    if (tab === 'code') syncEditor(currentCodeMode);
+    if (tab === 'zmk') syncSimpleEditor('zmkCodeCode', 'zmkHighlight');
+    if (tab === 'moergo') syncSimpleEditor('moergoCodeCode', 'moergoHighlight');
+}
+
+function switchCodeMode(mode) {
+    currentCodeMode = mode;
+    document.getElementById('codeModeBtn-ambient').classList.toggle('active', mode === 'ambient');
+    document.getElementById('codeModeBtn-reactive').classList.toggle('active', mode === 'reactive');
+    document.getElementById('codeWrapper-ambient').style.display = mode === 'ambient' ? 'block' : 'none';
+    document.getElementById('codeWrapper-reactive').style.display = mode === 'reactive' ? 'block' : 'none';
+    syncEditor(mode);
+}
+
+function switchLayout() {
+    const hw = document.getElementById('hwSelect').value;
+    activeLayout = JSON.parse(JSON.stringify(GEO[hw]));
+    const layoutLabels = LAYOUTS[hw] && LAYOUTS[hw]['qwerty'] ? LAYOUTS[hw]['qwerty'] : [];
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    activeLayout.forEach((k, i) => {
+        k.label = layoutLabels[i] || "";
+        let w = k.w || 1; let h = k.h || 1;
+        minX = Math.min(minX, k.x); maxX = Math.max(maxX, k.x + w);
+        minY = Math.min(minY, k.y); maxY = Math.max(maxY, k.y + h);
+    });
+    layoutBounds = { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+    resetZoom();
+
+    // Positions are no longer valid for the old layout — drop any in-flight presses.
+    activePresses = [];
+    heldKeyIndices.clear();
+}
+
+// --- 3. Physical Key Capture (drives the Reactive channel) ---
+// Maps a KeyboardEvent.code (physical location, layout-independent) to the
+// label strings used in LAYOUTS, so a press lights up the matching keycap.
+function codeToLabels(code) {
+    const map = {
+        'Escape': ['Esc'], 'Tab': ['Tab'], 'CapsLock': ['Caps'], 'Enter': ['Enter'],
+        'Space': ['Space'], 'Backspace': ['Backsp'], 'Delete': ['Delete'],
+        'ShiftLeft': ['LShift'], 'ShiftRight': ['RShift'],
+        'ControlLeft': ['LCtrl'], 'ControlRight': ['RCtrl'],
+        'AltLeft': ['LAlt'], 'AltRight': ['RAlt'],
+        'MetaLeft': ['LWin', 'LGUI'], 'MetaRight': ['RWin', 'RGUI'],
+        'ContextMenu': ['Menu'],
+        'ArrowUp': ['Up'], 'ArrowDown': ['Down'], 'ArrowLeft': ['Left'], 'ArrowRight': ['Right'],
+        'Home': ['Home'], 'End': ['End'], 'PageUp': ['PgUp'], 'PageDown': ['PgDn'],
+        'Minus': ['-'], 'Equal': ['='], 'BracketLeft': ['['], 'BracketRight': [']'],
+        'Backslash': ['\\'], 'Semicolon': [';'], 'Quote': ['\''],
+        'Comma': [','], 'Period': ['.'], 'Slash': ['/'], 'Backquote': ['`']
+    };
+    if (map[code]) return map[code];
+    if (/^Key[A-Z]$/.test(code)) return [code.slice(3)];
+    if (/^Digit[0-9]$/.test(code)) return [code.slice(5)];
+    if (/^F([1-9]|1[0-2])$/.test(code)) return [code];
+    return [];
+}
+
+// Keys where we suppress the browser's default (page scroll / focus change)
+// so the emulator can "eat" them like a real keyboard would.
+const PREVENT_DEFAULT_LABELS = new Set(['Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'PgUp', 'PgDn', 'Home', 'End', 'Backsp']);
+
+function findKeyIndices(labels) {
+    const idxs = [];
+    activeLayout.forEach((k, i) => { if (labels.includes(k.label)) idxs.push(i); });
+    return idxs;
+}
+
+function isTypingTarget() {
+    const tag = document.activeElement && document.activeElement.tagName;
+    return tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT';
+}
+
+function attachKeyListeners() {
+    document.addEventListener('keydown', (e) => {
+        if (isTypingTarget()) return;
+        const labels = codeToLabels(e.code);
+        if (!labels.length) return;
+        const idxs = findKeyIndices(labels);
+        if (!idxs.length) return;
+
+        if (PREVENT_DEFAULT_LABELS.has(labels[0]) || labels.some(l => PREVENT_DEFAULT_LABELS.has(l))) e.preventDefault();
+        if (e.repeat) return;
+
+        const now = performance.now() / 1000;
+        idxs.forEach(i => {
+            heldKeyIndices.add(i);
+            const k = activeLayout[i];
+            const nx = (k.x - layoutBounds.minX) / layoutBounds.width;
+            const ny = (k.y - layoutBounds.minY) / layoutBounds.height;
+            activePresses.push({ nx, ny, time: now });
+        });
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (isTypingTarget()) return;
+        const labels = codeToLabels(e.code);
+        if (!labels.length) return;
+        const idxs = findKeyIndices(labels);
+        idxs.forEach(i => heldKeyIndices.delete(i));
+    });
+
+    // If the window loses focus mid-press, don't leave keys stuck "held".
+    window.addEventListener('blur', () => heldKeyIndices.clear());
+}
+
+function getReactiveInfo(selfIdx, nx, ny, t) {
+    let list = [];
+    for (const p of activePresses) {
+        const age = t - p.time;
+        if (age < 0 || age > REACTIVE_MAX_AGE) continue;
+        const dx = nx - p.nx, dy = ny - p.ny;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        list.push({ dist, age, dx, dy });
+    }
+    // Sort by distance, but when two presses are equidistant (e.g. the same
+    // key pressed twice in a row — both at dist 0 to themselves) prefer the
+    // freshest one, so a repeat press doesn't get stuck behind its own
+    // already-decayed predecessor.
+    list.sort((a, b) => (a.dist - b.dist) || (a.age - b.age));
+    return { held: heldKeyIndices.has(selfIdx), presses: list, nearest: list.length ? list[0] : null, count: list.length };
+}
+
+// --- 4. Render Engine ---
+function draw(time) {
+    if (!activeLayout.length) { requestAnimationFrame(draw); return; }
+
+    const t = time / 1000;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (activePresses.length) {
+        activePresses = activePresses.filter(p => (t - p.time) <= REACTIVE_MAX_AGE);
+    }
+
+    const padding = 2;
+    const U = Math.min(canvas.width / (layoutBounds.width + padding), canvas.height / (layoutBounds.height + padding)) * zoomFactor;
+    const offsetX = (canvas.width - (layoutBounds.width * U)) / 2;
+    const offsetY = (canvas.height - (layoutBounds.height * U)) / 2;
+
+    activeLayout.forEach((k, i) => {
+        const nx = (k.x - layoutBounds.minX) / layoutBounds.width;
+        const ny = (k.y - layoutBounds.minY) / layoutBounds.height;
+
+        let base = isDark ? '#111' : '#ddd';
+        let color = base;
+
+        if (!k.isRound) {
+            let ambientColor = null;
+            if (channels.ambient.enabled && channels.ambient.shaderFn) {
+                try {
+                    let res = channels.ambient.shaderFn(nx, ny, t, channels.ambient.params);
+                    if (res && res !== 'rgba(0,0,0,0)' && res !== 'transparent') ambientColor = res;
+                } catch(e) {}
+            }
+            let bottomColor = channels.ambient.enabled ? (ambientColor || base) : base;
+            color = bottomColor;
+
+            if (channels.reactive.enabled && channels.reactive.shaderFn) {
+                const info = getReactiveInfo(i, nx, ny, t);
+                try {
+                    let res = channels.reactive.shaderFn(nx, ny, t, channels.reactive.params, info);
+                    if (res && res !== 'rgba(0,0,0,0)' && res !== 'transparent') {
+                        color = blendColors(res, bottomColor);
+                    }
+                } catch(e) {}
+            }
+        }
+
+        ctx.save();
+        ctx.translate(offsetX + (k.x - layoutBounds.minX) * U, offsetY + (k.y - layoutBounds.minY) * U);
+        if (k.r !== undefined) {
+            ctx.translate((k.rx - k.x) * U, (k.ry - k.y) * U);
+            ctx.rotate(k.r * Math.PI / 180);
+            ctx.translate(-(k.rx - k.x) * U, -(k.ry - k.y) * U);
+        }
+
+        const w = (k.w || 1) * U - (U * 0.1);
+        const h = (k.h || 1) * U - (U * 0.1);
+
+        ctx.beginPath();
+        if (k.isRound) ctx.arc(w/2, h/2, Math.min(w,h)/2, 0, Math.PI * 2);
+        else ctx.roundRect(0, 0, w, h, U * 0.15);
+
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (showLabels && k.label && zoomFactor > 0.5) {
+            ctx.fillStyle = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)";
+            ctx.font = `bold ${U * 0.25}px "JetBrains Mono", sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(k.label, w/2, h/2);
+        }
+
+        ctx.restore();
+    });
+
+    requestAnimationFrame(draw);
+}
+
+// --- 5. Preset / Compile Pipeline (shared by both channels) ---
+function loadPreset(channelName) {
+    const ch = channels[channelName];
+    const preset = document.getElementById(ch.presetSelectId).value;
+    let code = ch.presets[preset];
+
+    const configMatch = code.match(/\/\*CONFIG([\s\S]*?)CONFIG\*\//);
+    if (configMatch) {
+        try {
+            let config = JSON.parse(configMatch[1]);
+            let formattedJson = JSON.stringify(config, null, 2);
+            code = code.replace(/\/\*CONFIG[\s\S]*?CONFIG\*\//, `/*CONFIG\n${formattedJson}\nCONFIG*/`);
+        } catch(e) {}
+    }
+
+    ch.editorEl.value = code;
+    syncEditor(channelName);
+    compileChannel(channelName, true);
+}
+
+function compileChannel(channelName, isPresetLoad = false) {
+    const ch = channels[channelName];
+    const code = ch.editorEl.value;
+    const guiPanel = document.getElementById(ch.guiPanelId);
+
+    if (isPresetLoad) ch.params = {};
+
+    const configMatch = code.match(/\/\*CONFIG([\s\S]*?)CONFIG\*\//);
+    let hasGUI = false;
+
+    if (configMatch) {
+        try {
+            const config = JSON.parse(configMatch[1]);
+            let currentKeys = Object.keys(ch.params).join(',');
+            let newKeys = Object.keys(config).join(',');
+
+            if (isPresetLoad || currentKeys !== newKeys || guiPanel.innerHTML === '') {
+                guiPanel.innerHTML = '';
+                ch.params = {};
+                buildGUI(config, guiPanel, channelName);
+            }
+            hasGUI = true;
+        } catch(e) {}
+    }
+
+    if (!hasGUI) {
+        guiPanel.innerHTML = '<div class="no-gui-state">This effect is running on raw mathematical code.<br><br>Switch to the <b>Code Editor</b> to tweak the algorithm, or ask the AI to generate graphical controls for you!</div>';
+    }
+
+    try {
+        const fnArgs = channelName === 'reactive' ? ['nx', 'ny', 't', 'params', 'reactive'] : ['nx', 'ny', 't', 'params'];
+        ch.shaderFn = new Function(...fnArgs, 'const fmod = (a, b) => a % b;\n' + code.replace(/\/\*CONFIG([\s\S]*?)CONFIG\*\//g, ''));
+        if (channelName === 'ambient') { updateZmkCode(); bakeAnimation(true); }
+        syncEditor(channelName);
+    } catch (err) {}
+}
+
+function buildGUI(config, container, channelName) {
+    const ch = channels[channelName];
+    for(let key in config) {
+        let def = config[key];
+        if (ch.params[key] === undefined) ch.params[key] = def.value;
+
+        let wrapper = document.createElement('div'); wrapper.className = 'gui-control';
+        let label = document.createElement('label'); label.innerText = key; wrapper.appendChild(label);
+
+        let inputContainer = document.createElement('div');
+        inputContainer.className = 'gui-control-input';
+
+        if(def.type === 'slider') {
+            let input = document.createElement('input'); input.type = 'range';
+            input.id = 'gui-input-' + channelName + '-' + key;
+            input.min = def.min; input.max = def.max; input.step = def.step || 0.1;
+            input.value = ch.params[key];
+            let val = document.createElement('span'); val.innerText = input.value;
+            val.id = 'gui-val-' + channelName + '-' + key;
+            input.oninput = (e) => {
+                let parsedVal = parseFloat(e.target.value);
+                ch.params[key] = parsedVal;
+                val.innerText = e.target.value;
+                updateCodeEditorConfig(channelName, key, parsedVal);
+            };
+            inputContainer.appendChild(input); inputContainer.appendChild(val);
+        } else if (def.type === 'color') {
+            let input = document.createElement('input'); input.type = 'color';
+            input.id = 'gui-input-' + channelName + '-' + key;
+            input.value = ch.params[key];
+            input.oninput = (e) => {
+                ch.params[key] = e.target.value;
+                updateCodeEditorConfig(channelName, key, e.target.value);
+            };
+            inputContainer.appendChild(input);
+        } else if (def.type === 'select') {
+            let select = document.createElement('select');
+            select.id = 'gui-input-' + channelName + '-' + key;
+            for(let optLabel in def.options) {
+                let opt = document.createElement('option');
+                opt.text = optLabel;
+                opt.value = def.options[optLabel];
+                if(ch.params[key] == def.options[optLabel]) opt.selected = true;
+                select.appendChild(opt);
+            }
+            select.onchange = (e) => {
+                let val = e.target.value;
+                let parsedVal = isNaN(val) ? val : parseFloat(val);
+                ch.params[key] = parsedVal;
+                updateCodeEditorConfig(channelName, key, parsedVal);
+            };
+            inputContainer.appendChild(select);
+        }
+
+        wrapper.appendChild(inputContainer);
+        container.appendChild(wrapper);
+    }
+}
+
+function updateCodeEditorConfig(channelName, key, val) {
+    const ch = channels[channelName];
+    let code = ch.editorEl.value;
+    const configMatch = code.match(/\/\*CONFIG([\s\S]*?)CONFIG\*\//);
+    if (configMatch) {
+        try {
+            let config = JSON.parse(configMatch[1]);
+            if (config[key]) {
+                config[key].value = val;
+                let formattedJson = JSON.stringify(config, null, 2);
+                ch.editorEl.value = code.replace(/\/\*CONFIG[\s\S]*?CONFIG\*\//, `/*CONFIG\n${formattedJson}\nCONFIG*/`);
+                syncEditor(channelName);
+            }
+        } catch(e) {}
+    }
+    if (channelName === 'ambient') {
+        updateZmkCode();
+        bakeAnimation(true);
+    }
+}
+
+// --- 6. ZMK C-Code Transpiler (Ambient channel only) ---
+function updateZmkCode() {
+    let jsCode = channels.ambient.editorEl.value;
+    const currentParams = channels.ambient.params;
+
+    jsCode = jsCode.replace(/\/\*CONFIG([\s\S]*?)CONFIG\*\//g, '');
+
+    let colorInjection = "";
+    for (let key in currentParams) {
+        let val = currentParams[key];
+        if (typeof val === 'string' && val.startsWith('#')) {
+            let hex = val.replace('#', '');
+            let r = parseInt(hex.substring(0, 2), 16);
+            let g = parseInt(hex.substring(2, 4), 16);
+            let b = parseInt(hex.substring(4, 6), 16);
+            jsCode = jsCode.replace(/let hex = params\.color[^;]+;\s*let r = [^;]+, g = [^;]+, b = [^;]+;/g, '');
+            colorInjection += `float r = ${r}.0, g = ${g}.0, b = ${b}.0;\n        `;
+        }
+    }
+
+    let needsSmoothstep = jsCode.includes('smoothstep');
+    jsCode = jsCode.replace(/function\s+smoothstep\s*\([^)]+\)\s*\{[^}]+\}/g, '/* smoothstep is provided globally by the RGB Engine */');
+
+    jsCode = jsCode
+        .replace(/Math\.sin/g, 'sin')
+        .replace(/Math\.cos/g, 'cos')
+        .replace(/Math\.PI/g, 'M_PI')
+        .replace(/Math\.abs/g, 'fabs')
+        .replace(/Math\.sqrt/g, 'sqrt')
+        .replace(/Math\.pow/g, 'pow')
+        .replace(/Math\.max/g, 'fmax')
+        .replace(/Math\.min/g, 'fmin')
+        .replace(/Math\.exp/g, 'exp')
+        .replace(/Math\.floor/g, 'floor')
+        .replace(/Math\.atan2/g, 'atan2')
+        .replace(/\b(let|const)\b/g, 'float');
+
+    for (let key in currentParams) {
+        let val = currentParams[key];
+        if (typeof val === 'number') {
+            let floatStr = val.toString();
+            if (!floatStr.includes('.')) floatStr += '.0';
+            jsCode = jsCode.replace(new RegExp(`params\\.${key}`, 'g'), floatStr);
+        }
+    }
+
+    // Depth-Aware Return Parser (Handles nested commas safely)
+    jsCode = jsCode.replace(/return\s+[`'"](hsla?|rgba?)\(([\s\S]*?)\)[`'"]\s*;/g, (match, type, content) => {
+        let cleanContent = content.replace(/\$|{|}/g, '').trim();
+
+        let parts = []; let current = ""; let depth = 0;
+        for (let i = 0; i < cleanContent.length; i++) {
+            let char = cleanContent[i];
+            if (char === '(') depth++;
+            if (char === ')') depth--;
+            if (char === ',' && depth === 0) { parts.push(current.trim()); current = ""; }
+            else { current += char; }
+        }
+        parts.push(current.trim());
+
+        let out = "";
+        if (type.startsWith('hsl')) {
+            let h = parts[0]; let s = parts[1].replace('%', ''); let l = parts[2].replace('%', '');
+            out = `hsl_to_rgb(${h}, ${s}/100.0, ${l}/100.0, &pixels[i].r, &pixels[i].g, &pixels[i].b);`;
+        } else if (type.startsWith('rgb')) {
+            let r = parts[0], g = parts[1], b = parts[2], a = parts[3];
+            if (a && a !== '1' && a !== '1.0') {
+                out = `pixels[i].r = (uint8_t)((${r}) * (${a})); pixels[i].g = (uint8_t)((${g}) * (${a})); pixels[i].b = (uint8_t)((${b}) * (${a}));`;
+            } else {
+                out = `pixels[i].r = (uint8_t)(${r}); pixels[i].g = (uint8_t)(${g}); pixels[i].b = (uint8_t)(${b});`;
+            }
+        }
+        return `{ ${out} continue; }`;
+    });
+
+    jsCode = jsCode.replace(/return\s+['"]transparent['"]\s*;/g, '{ pixels[i].r = 0; pixels[i].g = 0; pixels[i].b = 0; continue; }');
+    jsCode = jsCode.replace(/return\s+['"]white['"]\s*;/g, '{ pixels[i].r = 255; pixels[i].g = 255; pixels[i].b = 255; continue; }');
+    jsCode = jsCode.replace(/return\s+['"]rgba\(0,0,0,1\)['"]\s*;/g, '{ pixels[i].r = 0; pixels[i].g = 0; pixels[i].b = 0; continue; }');
+    jsCode = jsCode.replace(/return\s+['"]rgba\(5,\s*10,\s*30,\s*1\.0\)['"]\s*;/g, '{ pixels[i].r = 5; pixels[i].g = 10; pixels[i].b = 30; continue; }');
+
+    let smoothstepBoilerplate = needsSmoothstep ? `\nfloat smoothstep(float e0, float e1, float x) {\n    float val = fmax(0.0f, fmin(1.0f, (x - e0) / (e1 - e0)));\n    return val * val * (3.0f - 2.0f * val);\n}\n` : '';
+
+    let boilerplate = `#include <zephyr/kernel.h>
+#include <math.h>
+
+// Automatically generated by RGB Lighting Studio (Ambient layer)
+${smoothstepBoilerplate}
+// Optional Helper: Convert HSL to RGB for Zephyr
+void hsl_to_rgb(float h, float s, float l, uint8_t *r, uint8_t *g, uint8_t *b) {
+    float c = (1.0f - fabs(2.0f * l - 1.0f)) * s;
+    float x = c * (1.0f - fabs(fmod(h / 60.0f, 2.0f) - 1.0f));
+    float m = l - c / 2.0f;
+    float r_f = 0, g_f = 0, b_f = 0;
+    if(h < 60) { r_f = c; g_f = x; } else if(h < 120) { r_f = x; g_f = c; }
+    else if(h < 180) { g_f = c; b_f = x; } else if(h < 240) { g_f = x; b_f = c; }
+    else if(h < 300) { r_f = x; b_f = c; } else { r_f = c; b_f = x; }
+    *r = (uint8_t)((r_f + m) * 255.0f);
+    *g = (uint8_t)((g_f + m) * 255.0f);
+    *b = (uint8_t)((b_f + m) * 255.0f);
+}
+
+void custom_rgb_tick(struct zmk_led_colors *pixels, size_t num_pixels) {
+    float t = k_uptime_get() / 1000.0;
+
+    // Auto-Calibrate Board Dimensions (Runs once)
+    static float max_x = 0;
+    static float max_y = 0;
+    if (max_x == 0) {
+        for (size_t j = 0; j < num_pixels; j++) {
+            float cx = (float)zmk_physical_layout_get_x(j);
+            float cy = (float)zmk_physical_layout_get_y(j);
+            if (cx > max_x) max_x = cx;
+            if (cy > max_y) max_y = cy;
+        }
+        if (max_x == 0) max_x = 255.0; // Fallback
+        if (max_y == 0) max_y = 255.0; // Fallback
+    }
+
+    for (size_t i = 0; i < num_pixels; i++) {
+        // Dynamically normalized coordinates (0.0 to 1.0)
+        float nx = (float)zmk_physical_layout_get_x(i) / max_x;
+        float ny = (float)zmk_physical_layout_get_y(i) / max_y;
+
+        ${colorInjection}${jsCode.trim()}
+    }
+}`;
+
+    zmkEditor.value = boilerplate;
+    syncSimpleEditor('zmkCodeCode', 'zmkHighlight');
+}
+
+// --- 7. The Animation Baker (Ambient channel only) ---
+function bakeAnimation(silent = false) {
+    const fps = parseInt(document.getElementById('bake-fps').value);
+    const duration = parseFloat(document.getElementById('bake-dur').value);
+    const totalFrames = Math.floor(fps * duration);
+    const numKeys = activeLayout.length;
+
+    let shaderFn;
+    try {
+        shaderFn = new Function('nx', 'ny', 't', 'params', 'const fmod = (a, b) => a % b;\n' + channels.ambient.editorEl.value.replace(/\/\*CONFIG([\s\S]*?)CONFIG\*\//g, ''));
+    } catch(e) {
+        if (!silent) alert("Shader contains Javascript errors. Fix them in the Code Editor before baking.");
+        return;
+    }
+
+    let bakedHex = [];
+
+    for (let f = 0; f < totalFrames; f++) {
+        let t = f / fps;
+        let frameHex = [];
+
+        for (let i = 0; i < numKeys; i++) {
+            const k = activeLayout[i];
+            const nx = (k.x - layoutBounds.minX) / layoutBounds.width;
+            const ny = (k.y - layoutBounds.minY) / layoutBounds.height;
+
+            let res = 'rgba(0,0,0,1)';
+            try {
+                res = shaderFn(nx, ny, t, channels.ambient.params);
+            } catch(e) {}
+
+            let c = parseCSSColor(res);
+            let r = Math.round(c[0] * c[3]);
+            let g = Math.round(c[1] * c[3]);
+            let b = Math.round(c[2] * c[3]);
+
+            let hexStr = "0x" + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0').toUpperCase();
+            frameHex.push(hexStr);
+        }
+        bakedHex.push("            " + frameHex.join(' '));
+    }
+
+    let moergoBoilerplate = `baked_data: baked_data {\n    compatible = "zmk,rgb-matrix-lookup-data";\n    /* Baked: ${totalFrames} Frames at ${fps} FPS for ${numKeys} Keys (Ambient layer) */\n    values = <\n${bakedHex.join('\n')}\n    >;\n};\n\nbaked_effect: baked_effect {\n    compatible = "zmk,rgb-matrix-program";\n    /* 🤖 THE ANIMATION BAKER\n     * Plays back the baked hex array like a video file!\n     * Note: Replace 'led' with your firmware's actual LED index variable if different.\n     */\n    program-src = "rgb(floor(lut((floor(time * ${fps}) % ${totalFrames}) * ${numKeys} + led) / 65536) % 256, floor(lut((floor(time * ${fps}) % ${totalFrames}) * ${numKeys} + led) / 256) % 256, lut((floor(time * ${fps}) % ${totalFrames}) * ${numKeys} + led) % 256)";\n};`;
+
+    document.getElementById('moergoCodeCode').value = moergoBoilerplate;
+    syncSimpleEditor('moergoCodeCode', 'moergoHighlight');
+
+    if (!silent) {
+        document.getElementById('tab-moergo').innerText = "🔥 BAKED!";
+        setTimeout(()=> document.getElementById('tab-moergo').innerText = "🔥 Baked LUT (.dtsi)", 1500);
+    }
+}
+
+// Boot up
+init();
+</script>
+</body>
+</html>
