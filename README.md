@@ -6,7 +6,13 @@ This tool shows a picture of a keyboard on your screen. You can make the keys gl
 
 It is made for people who build custom keyboards (like Glove80, Go60, and others) and want to test lighting ideas before putting them on real hardware.
 
-run here: https://moosylog.github.io/rgb_studio/
+## 🚀 Try it out
+
+<p align="center">
+  <a href="https://moosylog.github.io/rgb_studio/">
+    <img src="https://img.shields.io/badge/🎨%20Launch%20RGB%20Studio-Click%20to%20open-ff4b91?style=for-the-badge" alt="Launch RGB Studio">
+  </a>
+</p>
 
 ---
 
