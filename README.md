@@ -10,7 +10,7 @@ It is made for people who build custom keyboards (like Glove80, Go60, and others
 
 <p align="center">
   <a href="https://moosylog.github.io/rgb_studio/">
-    <img src="https://img.shields.io/badge/🎨%20Launch%20RGB%20Studio-Click%20to%20open-ff4b91?style=for-the-badge" alt="Launch RGB Studio">
+    <img src="https://img.shields.io/badge/🎨%20Launch%20RGB%20Studio-Click%20to%20Run-ff4b91?style=for-the-badge" alt="Launch RGB Studio">
   </a>
 </p>
 
