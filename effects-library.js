@@ -307,5 +307,192 @@ const fade = 1.0 - (age / params.duration);
 const intensity = core * fade;
 if (intensity < 0.02) return 'transparent';
 ${hexToRgb}
-return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`
+return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`,
+
+    bigBangExplosion: `// LABEL: 💥 Big Bang Explosion
+/*CONFIG
+{
+  "duration": { "type": "slider", "min": 0.2, "max": 2, "value": 0.8, "step": 0.05 },
+  "speed": { "type": "slider", "min": 1, "max": 15, "value": 7, "step": 0.5 },
+  "coreFlash": { "type": "slider", "min": 0.0, "max": 0.5, "value": 0.15, "step": 0.01 }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+if (age > params.duration) return 'transparent';
+const dist = reactive.nearest.dist;
+const progress = age / params.duration;
+const frontRadius = progress * params.speed * 0.3;
+// A very short white-hot flash right at the origin key.
+const core = age < params.coreFlash ? (1.0 - age / params.coreFlash) : 0.0;
+// An expanding ring that cools from white -> yellow -> orange -> red as it travels outward.
+const ringDist = Math.abs(dist - frontRadius);
+const ringIntensity = Math.max(0.0, 1.0 - ringDist / 0.12) * (1.0 - progress);
+if (core < 0.02 && ringIntensity < 0.02) return 'transparent';
+const heat = Math.max(core, ringIntensity * (1.0 - progress * 0.6));
+let hue, light;
+if (heat > 0.75) { hue = 50; light = 95; }
+else if (heat > 0.5) { hue = 40; light = 60; }
+else if (heat > 0.25) { hue = 20; light = 45; }
+else { hue = 0; light = 20; }
+const intensity = Math.max(core, ringIntensity);
+return \`hsla(\${hue}, 100%, \${light}%, \${intensity})\`;`,
+
+    neighborCascade: `// LABEL: 🌊 Neighbor Cascade (Surrounding Keys)
+/*CONFIG
+{
+  "ringGap": { "type": "slider", "min": 0.05, "max": 0.4, "value": 0.15, "step": 0.01 },
+  "ringSpeed": { "type": "slider", "min": 1, "max": 10, "value": 4, "step": 0.5 },
+  "flashTime": { "type": "slider", "min": 0.1, "max": 1, "value": 0.35, "step": 0.05 },
+  "color": { "type": "color", "value": "#33aaff" }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+const dist = reactive.nearest.dist;
+// Which "ring" of keys does this key belong to? 0 = the pressed key itself,
+// 1 = its immediate neighbors, 2 = the ring after that, and so on.
+const ringIndex = Math.floor(dist / params.ringGap);
+const ringStartTime = ringIndex / params.ringSpeed;
+const localAge = age - ringStartTime;
+if (localAge < 0.0 || localAge > params.flashTime) return 'transparent';
+const fade = 1.0 - (localAge / params.flashTime);
+${hexToRgb}
+return \`rgba(\${r}, \${g}, \${b}, \${fade})\`;`,
+
+    shatterCrack: `// LABEL: 🧊 Shatter Crack
+/*CONFIG
+{
+  "duration": { "type": "slider", "min": 0.2, "max": 1.5, "value": 0.6, "step": 0.05 },
+  "cracks": { "type": "slider", "min": 4, "max": 16, "value": 8, "step": 1 },
+  "jitter": { "type": "slider", "min": 0.0, "max": 1.0, "value": 0.4, "step": 0.05 },
+  "color": { "type": "color", "value": "#bbffff" }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+if (age > params.duration) return 'transparent';
+const p = reactive.nearest;
+const angleNorm = (Math.atan2(p.dy, p.dx) + Math.PI) / (Math.PI * 2.0);
+const sectorPos = angleNorm * params.cracks;
+const sectorIndex = Math.floor(sectorPos);
+const sectorFrac = sectorPos - sectorIndex;
+const noiseSeed = Math.sin(sectorIndex * 12.9898) * 43758.5453;
+const noise = noiseSeed - Math.floor(noiseSeed);
+const wobble = (noise - 0.5) * params.jitter * 0.5;
+const onCrack = Math.abs(sectorFrac - 0.5 - wobble) < 0.05 ? 1.0 : 0.0;
+const reach = Math.min(1.0, age * 10.0) * 0.85;
+const withinReach = p.dist < reach ? 1.0 : 0.0;
+const fade = 1.0 - (age / params.duration);
+const intensity = onCrack * withinReach * fade;
+if (intensity < 0.05) return 'transparent';
+${hexToRgb}
+return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`,
+
+    implosionPull: `// LABEL: 🕳️ Implosion Pull
+/*CONFIG
+{
+  "duration": { "type": "slider", "min": 0.2, "max": 2, "value": 0.7, "step": 0.05 },
+  "maxRadius": { "type": "slider", "min": 0.2, "max": 1.0, "value": 0.5, "step": 0.05 },
+  "thickness": { "type": "slider", "min": 0.02, "max": 0.3, "value": 0.08, "step": 0.01 },
+  "color": { "type": "color", "value": "#aa00ff" }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+if (age > params.duration) return 'transparent';
+const progress = age / params.duration;
+// The ring starts wide and collapses inward, like it's being sucked into the key.
+const ringRadius = params.maxRadius * (1.0 - progress);
+const dist = reactive.nearest.dist;
+const ringDist = Math.abs(dist - ringRadius);
+const ringIntensity = Math.max(0.0, 1.0 - ringDist / params.thickness) * (0.3 + 0.7 * progress);
+// A final bright "pop" right at the key as everything finishes collapsing in.
+const core = progress > 0.85 ? ((progress - 0.85) / 0.15) * Math.max(0.0, 1.0 - dist / 0.15) : 0.0;
+const intensity = Math.max(ringIntensity, core);
+if (intensity < 0.02) return 'transparent';
+${hexToRgb}
+return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`,
+
+    shockwaveBounce: `// LABEL: 🏀 Shockwave Bounce
+/*CONFIG
+{
+  "duration": { "type": "slider", "min": 0.3, "max": 2.5, "value": 1.0, "step": 0.05 },
+  "maxRadius": { "type": "slider", "min": 0.2, "max": 1.2, "value": 0.6, "step": 0.05 },
+  "thickness": { "type": "slider", "min": 0.02, "max": 0.3, "value": 0.1, "step": 0.01 },
+  "color": { "type": "color", "value": "#00ff88" }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+if (age > params.duration) return 'transparent';
+const progress = age / params.duration;
+// Elastic-out style easing: the ring overshoots its target size, then springs back and settles.
+const elastic = 1.0 - Math.pow(2.0, -8.0 * progress) * Math.cos(progress * 12.0);
+const ringRadius = Math.max(0.0, elastic) * params.maxRadius;
+const dist = reactive.nearest.dist;
+const ringDist = Math.abs(dist - ringRadius);
+const intensity = Math.max(0.0, 1.0 - ringDist / params.thickness) * (1.0 - progress);
+if (intensity < 0.02) return 'transparent';
+${hexToRgb}
+return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`,
+
+    starSpikes: `// LABEL: ⭐ Star Spikes
+/*CONFIG
+{
+  "duration": { "type": "slider", "min": 0.2, "max": 1.5, "value": 0.5, "step": 0.05 },
+  "spikes": { "type": "slider", "min": 3, "max": 12, "value": 6, "step": 1 },
+  "sharpness": { "type": "slider", "min": 1, "max": 20, "value": 8, "step": 1 },
+  "speed": { "type": "slider", "min": 1, "max": 10, "value": 5, "step": 0.5 },
+  "color": { "type": "color", "value": "#ffee00" }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const age = reactive.nearest.age;
+if (age > params.duration) return 'transparent';
+const p = reactive.nearest;
+const angle = Math.atan2(p.dy, p.dx);
+const rayShape = Math.pow(Math.max(0.0, Math.cos(angle * params.spikes)), params.sharpness);
+const reach = age * params.speed * 0.25;
+const withinReach = p.dist < reach ? 1.0 : 0.0;
+const fade = 1.0 - (age / params.duration);
+const intensity = rayShape * withinReach * fade;
+if (intensity < 0.03) return 'transparent';
+${hexToRgb}
+return \`rgba(\${r}, \${g}, \${b}, \${intensity})\`;`,
+
+    emberDebris: `// LABEL: 🔥 Ember Debris
+/*CONFIG
+{
+  "flashDuration": { "type": "slider", "min": 0.05, "max": 0.5, "value": 0.15, "step": 0.01 },
+  "emberDuration": { "type": "slider", "min": 0.5, "max": 4, "value": 2.0, "step": 0.1 },
+  "radius": { "type": "slider", "min": 0.1, "max": 0.8, "value": 0.4, "step": 0.05 },
+  "density": { "type": "slider", "min": 0.02, "max": 0.3, "value": 0.1, "step": 0.01 }
+}
+CONFIG*/
+if (!reactive.nearest) return 'transparent';
+const p = reactive.nearest;
+const age = p.age;
+if (age > params.emberDuration || p.dist > params.radius) return 'transparent';
+// A bright flash right at the center, very briefly.
+const flash = age < params.flashDuration
+    ? (1.0 - age / params.flashDuration) * Math.max(0.0, 1.0 - p.dist / 0.15)
+    : 0.0;
+// Scattered glowing embers: a deterministic per-key random seed decides which
+// keys get an ember, then it twinkles and slowly fades like settling ash.
+const seed = Math.sin((nx * 91.7 + ny * 53.3 + p.dist * 17.0) * 1000.0) * 43758.5453;
+const rand = seed - Math.floor(seed);
+let ember = 0.0;
+if (age > params.flashDuration && rand < params.density) {
+    const emberAge = age - params.flashDuration;
+    const emberSpan = Math.max(0.01, params.emberDuration - params.flashDuration);
+    const emberFade = Math.max(0.0, 1.0 - (emberAge / emberSpan));
+    const twinkle = 0.5 + 0.5 * Math.sin(t * 15.0 + rand * 80.0);
+    ember = emberFade * twinkle * Math.max(0.0, 1.0 - p.dist / params.radius);
+}
+const intensity = Math.max(flash, ember * 0.8);
+if (intensity < 0.03) return 'transparent';
+const hue = flash > ember ? 45 : 20;
+const light = flash > ember ? 85 : 45;
+return \`hsla(\${hue}, 100%, \${light}%, \${intensity})\`;`
 };
