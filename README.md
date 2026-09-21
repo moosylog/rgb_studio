@@ -13,7 +13,7 @@ run here: https://moosylog.github.io/rgb_studio/
 ## 📸 What it looks like
 
 *(Add a screenshot or short video here so people can see it before they try it.)*
-
+![Screenshot](screenshot.gif)
 ---
 
 ## 🧩 What's inside this repo
